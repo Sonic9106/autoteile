@@ -21,8 +21,8 @@
                 <div class="video-container">
                     <!-- Video-Element für den Live-Kamera-Stream -->
                     <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
-                    <!-- Unsichtbares Canvas-Element für die Bildverarbeitung -->
-                    <canvas id="camera-canvas" style="display: none;"></canvas>
+                    <!-- Scanbox, die über dem Video liegt -->
+                    <div id="scan-box"></div>
                 </div>
                 <div id="scan-feedback">
                     <p id="status-message">Kamera wird geladen...</p>
@@ -63,7 +63,8 @@
         const modal = document.getElementById('camera-modal');
         const closeButton = document.getElementsByClassName('close-button')[0];
         const video = document.getElementById('camera-stream');
-        const canvas = document.getElementById('camera-canvas');
+        const scanBox = document.getElementById('scan-box');
+        const canvas = document.createElement('canvas'); // Erstellen Sie ein unsichtbares Canvas-Element
         const context = canvas.getContext('2d');
         const statusMessage = document.getElementById('status-message');
         const progressBar = document.getElementById('progress-bar');
@@ -71,7 +72,7 @@
         
         let worker; // Tesseract Worker
         let isProcessing = false;
-
+        
         // Öffnet das Modal und startet die Kamera
         ctaButton.onclick = function() {
             modal.style.display = "flex";
@@ -99,17 +100,10 @@
             progressBar.style.width = '0%';
             
             try {
-                // Kamera-Stream starten (hintere Kamera)
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment'
-                    }
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
-
                 video.onloadedmetadata = () => {
                     video.play();
-                    // Live-Scan-Prozess starten, sobald das Video geladen ist
                     startScanLoop();
                 };
             } catch (err) {
@@ -136,8 +130,7 @@
                     }
                 }
             });
-            
-            await worker.loadLanguage('deu'); // Lädt Deutsch
+            await worker.loadLanguage('deu');
             await worker.initialize('deu');
             statusMessage.innerText = 'Bereit zum Scannen.';
             progressBar.style.width = '100%';
@@ -148,14 +141,12 @@
             if (!worker) {
                 await loadWorker();
             }
-            
             scanLoop();
         }
         
         // Scan-Schleife für die Live-Erkennung
         async function scanLoop() {
             if (isProcessing) {
-                // Wartet, bis der vorherige Scan abgeschlossen ist
                 requestAnimationFrame(scanLoop);
                 return;
             }
@@ -163,15 +154,25 @@
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 isProcessing = true;
                 
-                // Canvas-Größe anpassen und aktuellen Video-Frame zeichnen
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Koordinaten der Scanbox auf dem Video
+                const boxRect = scanBox.getBoundingClientRect();
+                const videoRect = video.getBoundingClientRect();
+                const scaleX = video.videoWidth / videoRect.width;
+                const scaleY = video.videoHeight / videoRect.height;
+
+                const cropX = (boxRect.left - videoRect.left) * scaleX;
+                const cropY = (boxRect.top - videoRect.top) * scaleY;
+                const cropWidth = boxRect.width * scaleX;
+                const cropHeight = boxRect.height * scaleY;
+
+                // Canvas an die Größe der Scanbox anpassen und den zugeschnittenen Bildbereich zeichnen
+                canvas.width = cropWidth;
+                canvas.height = cropHeight;
+                context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
                 
-                // OCR auf dem Canvas-Bild ausführen
                 const { data: { text } } = await worker.recognize(canvas);
                 
-                // Regex, um HSN (4 Ziffern) und TSN (3 Ziffern + 5 beliebige Zeichen) zu finden
+                // Regex, um HSN (4 Ziffern) und TSN (3 Buchstaben/Zahlen + 5 beliebige Zeichen) zu finden
                 const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
                 const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
                 
@@ -181,13 +182,11 @@
                 const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
                 const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
 
-                // Nur die extrahierten Daten anzeigen
                 recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
                 
                 isProcessing = false;
             }
             
-            // Schleife fortsetzen
             requestAnimationFrame(scanLoop);
         }
 
