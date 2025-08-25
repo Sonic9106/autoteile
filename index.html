@@ -17,19 +17,32 @@
             <span class="close-button">&times;</span>
             <div class="modal-body">
                 <h2>HSN/TSN scannen</h2>
-                <p>Bitte halten Sie Ihre Kamera über den Fahrzeugschein</p>
-                <div class="video-container">
-                    <!-- Video-Element für den Live-Kamera-Stream -->
-                    <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
-                    <!-- Scanbox, die über dem Video liegt -->
-                    <div id="scan-box"></div>
+                <!-- Auswahl der Scan-Methode -->
+                <div id="method-selection">
+                    <button id="live-scan-btn" class="modal-btn">
+                        <i class="fas fa-camera"></i> Live-Scan starten
+                    </button>
+                    <button id="upload-btn" class="modal-btn">
+                        <i class="fas fa-upload"></i> Foto hochladen
+                    </button>
+                    <input type="file" id="file-input" accept="image/*" style="display: none;">
                 </div>
-                <div id="scan-feedback">
+
+                <!-- Bereich für den Live-Scan (initial versteckt) -->
+                <div id="live-scan-container" class="hidden">
+                    <p>Bitte halten Sie Ihre Kamera über den Fahrzeugschein</p>
+                    <div class="video-container">
+                        <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
+                        <div id="scan-box"></div>
+                    </div>
+                </div>
+
+                <!-- Bereich für das Ergebnis und Feedback (initial versteckt) -->
+                <div id="scan-feedback" class="hidden">
                     <p id="status-message">Kamera wird geladen...</p>
                     <div id="progress-bar-container" class="progress-bar-container">
                         <div id="progress-bar" class="progress-bar"></div>
                     </div>
-                    <!-- Bereich für die erkannten Daten -->
                     <pre id="recognized-text"></pre>
                 </div>
             </div>
@@ -62,21 +75,31 @@
         const ctaButton = document.getElementById('cta-button');
         const modal = document.getElementById('camera-modal');
         const closeButton = document.getElementsByClassName('close-button')[0];
+        const liveScanBtn = document.getElementById('live-scan-btn');
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInput = document.getElementById('file-input');
+        const liveScanContainer = document.getElementById('live-scan-container');
+        const scanFeedback = document.getElementById('scan-feedback');
         const video = document.getElementById('camera-stream');
         const scanBox = document.getElementById('scan-box');
-        const canvas = document.createElement('canvas'); // Erstellen Sie ein unsichtbares Canvas-Element
+        const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         const statusMessage = document.getElementById('status-message');
         const progressBar = document.getElementById('progress-bar');
         const recognizedText = document.getElementById('recognized-text');
         
-        let worker; // Tesseract Worker
+        let worker;
         let isProcessing = false;
-        
-        // Öffnet das Modal und startet die Kamera
+        let isLiveScan = false;
+        let animationFrameId;
+
+        // Öffnet das Modal
         ctaButton.onclick = function() {
             modal.style.display = "flex";
-            startCameraAndOCR();
+            document.getElementById('method-selection').classList.remove('hidden');
+            liveScanContainer.classList.add('hidden');
+            scanFeedback.classList.add('hidden');
+            recognizedText.innerText = 'HSN: Nicht gefunden\nTSN: Nicht gefunden';
         }
 
         // Schließt das Modal-Fenster
@@ -92,13 +115,53 @@
                 stopCameraAndOCR();
             }
         }
+        
+        // Klick auf Live-Scan starten
+        liveScanBtn.onclick = function() {
+            document.getElementById('method-selection').classList.add('hidden');
+            liveScanContainer.classList.remove('hidden');
+            scanFeedback.classList.remove('hidden');
+            isLiveScan = true;
+            startCameraAndOCR();
+        }
 
-        // Hauptfunktion zum Starten der Kamera und OCR
-        async function startCameraAndOCR() {
-            recognizedText.innerText = 'HSN: Nicht gefunden\nTSN: Nicht gefunden';
-            statusMessage.innerText = 'Kamera wird gestartet...';
+        // Klick auf Foto hochladen
+        uploadBtn.onclick = function() {
+            fileInput.click();
+        }
+
+        // Dateiauswahl verarbeiten
+        fileInput.onchange = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('method-selection').classList.add('hidden');
+            liveScanContainer.classList.add('hidden');
+            scanFeedback.classList.remove('hidden');
+            statusMessage.innerText = 'Bild wird verarbeitet...';
             progressBar.style.width = '0%';
-            
+            isLiveScan = false;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = async () => {
+                    await loadWorker();
+                    // Canvas-Größe anpassen und Bild zeichnen
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0, img.width, img.height);
+                    
+                    // OCR auf dem statischen Bild ausführen
+                    runOCR();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Hauptfunktion zum Starten der Kamera und OCR (für Live-Scan)
+        async function startCameraAndOCR() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
@@ -111,21 +174,40 @@
                 statusMessage.innerHTML = `<i class="fas fa-exclamation-triangle"></i><p>Kamerazugriff fehlgeschlagen. Bitte HTTPS oder Online-Hosting verwenden.</p>`;
             }
         }
-        
+
+        async function runOCR() {
+            isProcessing = true;
+            statusMessage.innerText = 'Scanne HSN & TSN...';
+            progressBar.style.width = '50%';
+            
+            const { data: { text } } = await worker.recognize(canvas);
+            
+            const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
+            const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
+            
+            const hsnMatch = text.match(hsnRegex);
+            const tsnMatch = text.match(tsnRegex);
+
+            const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
+            const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
+
+            recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
+            statusMessage.innerText = 'Scan abgeschlossen.';
+            progressBar.style.width = '100%';
+            isProcessing = false;
+        }
+
         // OCR-Worker laden
         async function loadWorker() {
+            if (worker) return; // Worker nur einmal laden
             statusMessage.innerText = 'Lade OCR-Modul...';
             progressBar.style.width = '10%';
             worker = await Tesseract.createWorker({
                 logger: m => {
                     if (m.progress) {
                         const progressPercent = Math.round(m.progress * 100);
-                        if (m.status === 'recognizing text') {
-                           statusMessage.innerText = 'Scanne Fahrzeugschein...';
+                        if (m.status === 'recognizing text' || m.status === 'initializing api') {
                            progressBar.style.width = `${50 + progressPercent / 2}%`;
-                        } else if (m.status === 'loading tesseract core' || m.status === 'initializing api') {
-                           statusMessage.innerText = 'Lade OCR-Modul...';
-                           progressBar.style.width = `${progressPercent * 0.5}%`;
                         }
                     }
                 }
@@ -136,18 +218,10 @@
             progressBar.style.width = '100%';
         }
         
-        // Startet den kontinuierlichen Scan-Prozess
-        async function startScanLoop() {
-            if (!worker) {
-                await loadWorker();
-            }
-            scanLoop();
-        }
-        
         // Scan-Schleife für die Live-Erkennung
         async function scanLoop() {
-            if (isProcessing) {
-                requestAnimationFrame(scanLoop);
+            if (isProcessing || !isLiveScan) {
+                animationFrameId = requestAnimationFrame(scanLoop);
                 return;
             }
             
@@ -165,29 +239,14 @@
                 const cropWidth = boxRect.width * scaleX;
                 const cropHeight = boxRect.height * scaleY;
 
-                // Canvas an die Größe der Scanbox anpassen und den zugeschnittenen Bildbereich zeichnen
                 canvas.width = cropWidth;
                 canvas.height = cropHeight;
                 context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
                 
-                const { data: { text } } = await worker.recognize(canvas);
-                
-                // Regex, um HSN (4 Ziffern) und TSN (3 Buchstaben/Zahlen + 5 beliebige Zeichen) zu finden
-                const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
-                const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
-                
-                const hsnMatch = text.match(hsnRegex);
-                const tsnMatch = text.match(tsnRegex);
-
-                const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
-                const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
-
-                recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
-                
-                isProcessing = false;
+                await runOCR();
             }
             
-            requestAnimationFrame(scanLoop);
+            animationFrameId = requestAnimationFrame(scanLoop);
         }
 
         // Stoppt den Kamera-Stream und Tesseract Worker
@@ -199,6 +258,10 @@
             if (worker) {
                 worker.terminate();
                 worker = null;
+            }
+            isLiveScan = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
             }
         }
     </script>
