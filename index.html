@@ -6,8 +6,8 @@
     <title>TeileDoc</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Tesseract.js Bibliothek für die optische Zeichenerkennung (OCR) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- Paddle.js Bibliothek für die optische Zeichenerkennung (OCR) -->
+    <script src="https://unpkg.com/@paddlejs/paddlejs-ocr/dist/paddlejs-ocr.js"></script>
 </head>
 <body>
 
@@ -69,6 +69,7 @@
     </main>
 
     <script>
+        // DOM-Elemente
         const ctaButton = document.getElementById('cta-button');
         const modal = document.getElementById('camera-modal');
         const closeButton = document.getElementsByClassName('close-button')[0];
@@ -87,10 +88,25 @@
         const progressBar = document.getElementById('progress-bar');
         const recognizedText = document.getElementById('recognized-text');
         
-        let worker;
+        let ocr;
         let isProcessing = false;
         let isLiveScan = false;
         let animationFrameId;
+
+        // Initialisiert PaddleOCR
+        async function loadOCRModel() {
+            if (ocr) return; // Modell nur einmal laden
+            statusMessage.innerText = 'Lade OCR-Modell...';
+            progressBar.style.width = '10%';
+            try {
+                ocr = await paddlejs.ocr.init();
+                statusMessage.innerText = 'Bereit zum Scannen.';
+                progressBar.style.width = '100%';
+            } catch (err) {
+                console.error("Fehler beim Laden des OCR-Modells:", err);
+                statusMessage.innerHTML = `<i class="fas fa-exclamation-triangle"></i><p>Fehler beim Laden des OCR-Modells.</p>`;
+            }
+        }
 
         // Öffnet das Modal
         ctaButton.onclick = function() {
@@ -99,19 +115,20 @@
             liveScanContainer.classList.add('hidden');
             scanFeedback.classList.add('hidden');
             recognizedText.innerText = 'HSN: Nicht gefunden\nTSN: Nicht gefunden';
+            loadOCRModel();
         }
 
         // Schließt das Modal-Fenster
         closeButton.onclick = function() {
             modal.style.display = "none";
-            stopCameraAndOCR();
+            stopCamera();
         }
 
         // Schließt das Modal, wenn außerhalb geklickt wird
         window.onclick = function(event) {
             if (event.target == modal) {
                 modal.style.display = "none";
-                stopCameraAndOCR();
+                stopCamera();
             }
         }
         
@@ -121,7 +138,7 @@
             liveScanContainer.classList.remove('hidden');
             scanFeedback.classList.remove('hidden');
             isLiveScan = true;
-            startCameraAndOCR();
+            startCameraAndScan();
         }
 
         // Klick auf Foto hochladen
@@ -134,7 +151,7 @@
         feedbackBackBtn.onclick = resetToMethodSelection;
 
         function resetToMethodSelection() {
-            stopCameraAndOCR();
+            stopCamera();
             liveScanContainer.classList.add('hidden');
             scanFeedback.classList.add('hidden');
             document.getElementById('method-selection').classList.remove('hidden');
@@ -142,7 +159,6 @@
             statusMessage.innerText = '';
             progressBar.style.width = '0%';
         }
-
 
         // Dateiauswahl verarbeiten
         fileInput.onchange = function(event) {
@@ -152,30 +168,31 @@
             document.getElementById('method-selection').classList.add('hidden');
             liveScanContainer.classList.add('hidden');
             scanFeedback.classList.remove('hidden');
+            isLiveScan = false;
+            
+            // Zeige sofort den "Verarbeite"-Status an
             statusMessage.innerText = 'Bild wird verarbeitet...';
             progressBar.style.width = '0%';
-            isLiveScan = false;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 const img = new Image();
                 img.onload = async () => {
-                    await loadWorker();
                     // Canvas-Größe anpassen und Bild zeichnen
                     canvas.width = img.width;
                     canvas.height = img.height;
                     context.drawImage(img, 0, 0, img.width, img.height);
                     
                     // OCR auf dem statischen Bild ausführen
-                    runOCR();
+                    await runOCR(canvas);
                 };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
         
-        // Hauptfunktion zum Starten der Kamera und OCR (für Live-Scan)
-        async function startCameraAndOCR() {
+        // Hauptfunktion zum Starten der Kamera
+        async function startCameraAndScan() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 video.srcObject = stream;
@@ -189,53 +206,46 @@
             }
         }
 
-        async function runOCR() {
+        // Führt die OCR-Erkennung aus
+        async function runOCR(image) {
+            if (!ocr) {
+                statusMessage.innerText = 'OCR-Modul wird geladen... Bitte warten.';
+                return;
+            }
             isProcessing = true;
             statusMessage.innerText = 'Scanne HSN & TSN...';
             progressBar.style.width = '50%';
             
-            const { data: { text } } = await worker.recognize(canvas);
-            
-            const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
-            const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
-            
-            const hsnMatch = text.match(hsnRegex);
-            const tsnMatch = text.match(tsnRegex);
+            try {
+                // PaddleOCR erkennt Textbereiche im Bild
+                const res = await ocr.recognize(image);
+                const fullText = res.map(item => item.text).join(' ');
 
-            const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
-            const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
+                // RegEx-Muster für HSN/TSN
+                const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
+                const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
+                
+                const hsnMatch = fullText.match(hsnRegex);
+                const tsnMatch = fullText.match(tsnRegex);
 
-            recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
-            statusMessage.innerText = 'Scan abgeschlossen.';
-            progressBar.style.width = '100%';
-            isProcessing = false;
-        }
+                const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
+                const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
 
-        // OCR-Worker laden
-        async function loadWorker() {
-            if (worker) return; // Worker nur einmal laden
-            statusMessage.innerText = 'Lade OCR-Modul...';
-            progressBar.style.width = '10%';
-            worker = await Tesseract.createWorker({
-                logger: m => {
-                    if (m.progress) {
-                        const progressPercent = Math.round(m.progress * 100);
-                        if (m.status === 'recognizing text' || m.status === 'initializing api') {
-                           progressBar.style.width = `${50 + progressPercent / 2}%`;
-                        }
-                    }
-                }
-            });
-            await worker.loadLanguage('deu');
-            await worker.initialize('deu');
-            statusMessage.innerText = 'Bereit zum Scannen.';
-            progressBar.style.width = '100%';
+                recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
+                statusMessage.innerText = 'Scan abgeschlossen.';
+                progressBar.style.width = '100%';
+            } catch (err) {
+                console.error("Fehler bei der OCR-Erkennung:", err);
+                statusMessage.innerHTML = `<i class="fas fa-exclamation-triangle"></i><p>Fehler bei der Texterkennung.</p>`;
+            } finally {
+                isProcessing = false;
+            }
         }
         
         // Scan-Schleife für die Live-Erkennung
-        async function scanLoop() {
+        async function startScanLoop() {
             if (isProcessing || !isLiveScan) {
-                animationFrameId = requestAnimationFrame(scanLoop);
+                animationFrameId = requestAnimationFrame(startScanLoop);
                 return;
             }
             
@@ -257,21 +267,17 @@
                 canvas.height = cropHeight;
                 context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
                 
-                await runOCR();
+                await runOCR(canvas);
             }
             
-            animationFrameId = requestAnimationFrame(scanLoop);
+            animationFrameId = requestAnimationFrame(startScanLoop);
         }
 
-        // Stoppt den Kamera-Stream und Tesseract Worker
-        function stopCameraAndOCR() {
+        // Stoppt den Kamera-Stream
+        function stopCamera() {
             if (video.srcObject) {
                 video.srcObject.getTracks().forEach(track => track.stop());
                 video.srcObject = null;
-            }
-            if (worker) {
-                worker.terminate();
-                worker = null;
             }
             isLiveScan = false;
             if (animationFrameId) {
