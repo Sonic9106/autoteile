@@ -30,6 +30,7 @@
 
                 <!-- Bereich für den Live-Scan (initial versteckt) -->
                 <div id="live-scan-container" class="hidden">
+                    <button id="live-scan-back-btn" class="back-btn"><i class="fas fa-arrow-left"></i></button>
                     <p>Bitte halten Sie Ihre Kamera über den Fahrzeugschein</p>
                     <div class="video-container">
                         <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
@@ -39,6 +40,7 @@
 
                 <!-- Bereich für das Ergebnis und Feedback (initial versteckt) -->
                 <div id="scan-feedback" class="hidden">
+                    <button id="feedback-back-btn" class="back-btn"><i class="fas fa-arrow-left"></i></button>
                     <p id="status-message">Kamera wird geladen...</p>
                     <div id="progress-bar-container" class="progress-bar-container">
                         <div id="progress-bar" class="progress-bar"></div>
@@ -72,6 +74,8 @@
         const closeButton = document.getElementsByClassName('close-button')[0];
         const liveScanBtn = document.getElementById('live-scan-btn');
         const uploadBtn = document.getElementById('upload-btn');
+        const liveScanBackBtn = document.getElementById('live-scan-back-btn');
+        const feedbackBackBtn = document.getElementById('feedback-back-btn');
         const fileInput = document.getElementById('file-input');
         const liveScanContainer = document.getElementById('live-scan-container');
         const scanFeedback = document.getElementById('scan-feedback');
@@ -124,6 +128,21 @@
         uploadBtn.onclick = function() {
             fileInput.click();
         }
+        
+        // Zurück-Buttons
+        liveScanBackBtn.onclick = resetToMethodSelection;
+        feedbackBackBtn.onclick = resetToMethodSelection;
+
+        function resetToMethodSelection() {
+            stopCameraAndOCR();
+            liveScanContainer.classList.add('hidden');
+            scanFeedback.classList.add('hidden');
+            document.getElementById('method-selection').classList.remove('hidden');
+            recognizedText.innerText = 'HSN: Nicht gefunden\nTSN: Nicht gefunden';
+            statusMessage.innerText = '';
+            progressBar.style.width = '0%';
+        }
+
 
         // Dateiauswahl verarbeiten
         fileInput.onchange = function(event) {
