@@ -121,6 +121,7 @@ body {
     background-color: rgba(0,0,0,0.6);
     justify-content: center;
     align-items: center;
+    overflow-y: auto;
 }
 
 .modal-content {
@@ -128,7 +129,7 @@ body {
     padding: 20px;
     border-radius: 10px;
     width: 90%;
-    max-width: 400px;
+    max-width: 600px;
     text-align: center;
     position: relative;
 }
@@ -143,19 +144,52 @@ body {
     cursor: pointer;
 }
 
-.camera-stream {
+.video-container {
+    position: relative;
     width: 100%;
-    max-width: 100%;
     height: auto;
     background-color: #000;
     border-radius: 10px;
-    display: none;
+    margin-bottom: 10px;
 }
 
-.camera-message {
-    padding: 50px 20px;
-    text-align: center;
-    border: 2px dashed #ccc;
+.camera-stream {
+    width: 100%;
+    height: auto;
     border-radius: 10px;
-    color: #FF0000;
+}
+
+#scan-feedback {
+    text-align: left;
+    margin-top: 10px;
+}
+
+#status-message {
+    font-weight: bold;
+    color: var(--color-black);
+}
+
+.progress-bar-container {
+    width: 100%;
+    background-color: #ddd;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.progress-bar {
+    height: 10px;
+    background-color: var(--color-yellow);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#recognized-text {
+    background-color: #f0f0f0;
+    padding: 10px;
+    border-radius: 5px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 200px;
+    overflow-y: auto;
 }
