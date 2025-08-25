@@ -16,8 +16,8 @@
         <div class="modal-content">
             <span class="close-button">&times;</span>
             <div class="modal-body">
-                <h2>Fahrzeugschein scannen</h2>
-                <p>Bitte richten Sie Ihre Kamera auf den Fahrzeugschein.</p>
+                <h2>HSN/TSN scannen</h2>
+                <p>Bitte halten Sie Ihre Kamera über den Fahrzeugschein</p>
                 <div class="video-container">
                     <!-- Video-Element für den Live-Kamera-Stream -->
                     <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
@@ -94,7 +94,7 @@
 
         // Hauptfunktion zum Starten der Kamera und OCR
         async function startCameraAndOCR() {
-            recognizedText.innerText = '';
+            recognizedText.innerText = 'HSN: Nicht gefunden\nTSN: Nicht gefunden';
             statusMessage.innerText = 'Kamera wird gestartet...';
             progressBar.style.width = '0%';
             
@@ -137,8 +137,8 @@
                 }
             });
             
-            await worker.loadLanguage('eng+deu'); // Lädt Englisch und Deutsch
-            await worker.initialize('eng+deu');
+            await worker.loadLanguage('deu'); // Lädt Deutsch
+            await worker.initialize('deu');
             statusMessage.innerText = 'Bereit zum Scannen.';
             progressBar.style.width = '100%';
         }
@@ -171,8 +171,18 @@
                 // OCR auf dem Canvas-Bild ausführen
                 const { data: { text } } = await worker.recognize(canvas);
                 
-                // Text-Ergebnisse anzeigen
-                recognizedText.innerText = `Erkannte Daten:\n${text}`;
+                // Regex, um HSN (4 Ziffern) und TSN (3 Ziffern + 5 beliebige Zeichen) zu finden
+                const hsnRegex = /(?:HSN|2\.1)\s*(\d{4})/;
+                const tsnRegex = /(?:TSN|2\.2)\s*([a-zA-Z0-9]{3}[a-zA-Z0-9]{5})/;
+                
+                const hsnMatch = text.match(hsnRegex);
+                const tsnMatch = text.match(tsnRegex);
+
+                const hsn = hsnMatch ? hsnMatch[1] : 'Nicht gefunden';
+                const tsn = tsnMatch ? tsnMatch[1] : 'Nicht gefunden';
+
+                // Nur die extrahierten Daten anzeigen
+                recognizedText.innerText = `HSN: ${hsn}\nTSN: ${tsn}`;
                 
                 isProcessing = false;
             }
