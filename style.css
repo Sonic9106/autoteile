@@ -144,6 +144,24 @@ body {
     cursor: pointer;
 }
 
+/* Neue Button-Styles für die Modalauswahl */
+.modal-btn {
+    background-color: var(--color-gray);
+    color: var(--color-white);
+    border: none;
+    padding: 15px 25px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    margin: 10px;
+    transition: background-color 0.3s ease;
+}
+
+.modal-btn:hover {
+    background-color: #4A5665;
+}
+
 .video-container {
     position: relative;
     width: 100%;
@@ -159,7 +177,7 @@ body {
     border-radius: 10px;
 }
 
-/* Neue Scanbox, die über dem Video liegt */
+/* Scanbox, die über dem Video liegt */
 #scan-box {
     position: absolute;
     top: 50%;
@@ -169,7 +187,7 @@ body {
     transform: translate(-50%, -50%);
     border: 3px solid var(--color-yellow);
     border-radius: 10px;
-    pointer-events: none; /* Ermöglicht das Klicken der darunterliegenden Elemente */
+    pointer-events: none;
 }
 
 #scan-feedback {
@@ -205,4 +223,9 @@ body {
     word-wrap: break-word;
     max-height: 200px;
     overflow-y: auto;
+}
+
+/* Hilfsklasse zum Verbergen von Elementen */
+.hidden {
+    display: none;
 }
