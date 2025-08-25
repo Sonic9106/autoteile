@@ -93,6 +93,56 @@ body {
     background-color: #F8D802;
 }
 
+/* Manuelle Suchleiste */
+.manual-search-container {
+    width: 100%;
+    padding: 0 15px;
+    margin-top: 20px; /* Angenehmer Abstand */
+}
+
+.search-field {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.manual-search-input {
+    flex-grow: 1;
+    padding: 15px 20px;
+    border: 2px solid var(--color-gray);
+    border-right: none;
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+    background-color: var(--color-white);
+    font-size: 1rem;
+    outline: none;
+}
+
+.manual-search-input::placeholder {
+    color: #a0a0a0;
+}
+
+.search-btn {
+    background-color: var(--color-yellow);
+    color: var(--color-white); /* Lupe ist weiß */
+    border: none;
+    width: 50px;
+    height: 50px;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    flex-shrink: 0; /* Verhindert, dass der Button schrumpft */
+}
+
+.search-btn i {
+    color: var(--color-black); /* Lupe ist gelb, wie der Button selbst */
+    font-size: 1.2rem;
+}
+
 /* Modal-Stile (für die Kamera-Funktion) */
 .modal {
     display: none;
