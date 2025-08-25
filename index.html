@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeileDoc</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <!-- Modal für die Kameraaufforderung -->
+    <div id="camera-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div class="modal-body">
+                <h2>Fahrzeugschein scannen</h2>
+                <p>Bitte richten Sie Ihre hintere Kamera auf den Fahrzeugschein.</p>
+                <!-- Video-Element für den Kamera-Stream -->
+                <video id="camera-stream" class="camera-stream" autoplay playsinline></video>
+                <div id="camera-message" class="camera-message">
+                    <!-- Standardmeldung, die beim Start der Kamera verschwindet -->
+                    <p>Kamera wird gestartet...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fester Header -->
+    <header class="header">
+        <h1 class="logo">TeileDoc</h1>
+        <button class="login-btn">Login / Registrieren</button>
+    </header>
+
+    <!-- Hauptinhalt der Seite -->
+    <main class="main-content">
+        <!-- Call-to-Action-Button für den Fahrzeugschein -->
+        <div class="search-cta-container">
+            <button id="cta-button" class="search-cta-btn">
+                <i class="fas fa-camera"></i>
+                <span>Fahrzeugschein abfotografieren</span>
+            </button>
+        </div>
+
+        <!-- Manuelle Suchleiste -->
+        <div class="manual-search-container">
+            <input type="text" class="manual-search-input" placeholder="Manuelle Suche">
+        </div>
+    </main>
+
+    <script>
+        const ctaButton = document.getElementById('cta-button');
+        const modal = document.getElementById('camera-modal');
+        const closeButton = document.getElementsByClassName('close-button')[0];
+        const video = document.getElementById('camera-stream');
+        const message = document.getElementById('camera-message');
+
+        // Öffnet das Modal und versucht, die Kamera zu starten
+        ctaButton.onclick = function() {
+            modal.style.display = "flex";
+            startCamera();
+        }
+
+        // Schließt das Modal-Fenster
+        closeButton.onclick = function() {
+            modal.style.display = "none";
+            stopCamera();
+        }
+
+        // Schließt das Modal, wenn außerhalb geklickt wird
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+                stopCamera();
+            }
+        }
+
+        // Funktion zum Starten der hinteren Kamera
+        async function startCamera() {
+            message.style.display = 'block';
+            video.style.display = 'none';
+
+            try {
+                // Versucht, die hintere Kamera zu verwenden
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment' // 'environment' wählt die hintere Kamera
+                    }
+                });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                message.style.display = 'none';
+            } catch (err) {
+                console.error("Fehler beim Zugriff auf die Kamera: ", err);
+                video.style.display = 'none';
+                message.style.display = 'block';
+                message.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Der Kamerazugriff ist nur über eine sichere HTTPS-Verbindung möglich.
+                    <br><br>
+                    Bitte laden Sie diese Seite über HTTPS oder hosten Sie sie online.</p>
+                `;
+            }
+        }
+
+        // Funktion zum Stoppen des Kamera-Streams
+        function stopCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
+    </script>
+</body>
+</html>
