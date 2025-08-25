@@ -159,6 +159,19 @@ body {
     border-radius: 10px;
 }
 
+/* Neue Scanbox, die über dem Video liegt */
+#scan-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 80%;
+    height: 30%;
+    transform: translate(-50%, -50%);
+    border: 3px solid var(--color-yellow);
+    border-radius: 10px;
+    pointer-events: none; /* Ermöglicht das Klicken der darunterliegenden Elemente */
+}
+
 #scan-feedback {
     text-align: left;
     margin-top: 10px;
